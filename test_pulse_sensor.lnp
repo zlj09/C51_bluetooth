@@ -1,0 +1,3 @@
+"test_pulse_sensor.obj" 
+TO "test_pulse_sensor" 
+RAMSIZE(256) 

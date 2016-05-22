@@ -1,0 +1,238 @@
+C51 COMPILER V9.01   TEST_PULSE_SENSOR                                                     05/22/2016 22:41:55 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE TEST_PULSE_SENSOR
+OBJECT MODULE PLACED IN test_pulse_sensor.OBJ
+COMPILER INVOKED BY: G:\Keli\C51\BIN\C51.EXE test_pulse_sensor.c BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #define         MAIN_Fosc               11059200L       
+   2          
+   3          #include        "STC15Fxxxx.H"
+   4          
+   5          #include        "stdio.h"
+   6          #include        "string.h"
+   7          
+   8          #define Baud_Rate       9600
+   9          
+  10          #define Timer0_Reload   (65536UL -(MAIN_Fosc / Baud_Rate))              
+  11          
+  12          #define DIS_DOT         0x20
+  13          #define DIS_BLACK       0x10
+  14          #define DIS_            0x11
+  15          
+  16          #define MAX_MSG         16
+  17          
+  18          u8 bit_pulse;
+  19          
+  20          u8 timer_10ms;
+  21          
+  22          sbit state = P0^0;
+  23          sbit data_o = P0^1;
+  24          sbit data_i = P0^2;
+  25          
+  26          sbit err_led = P1^0;    //debug
+  27          sbit rsv_led = P1^1;    //debug
+  28          sbit send_led = P1^2;   //debug
+  29          
+  30          void init(){
+  31   1              P0M1 = 0;       P0M0 = 0;       
+  32   1              P1M1 = 0;       P1M0 = 0;       
+  33   1              P2M1 = 0;       P2M0 = 0;       
+  34   1              P3M1 = 0;       P3M0 = 0;       
+  35   1              P4M1 = 0;       P4M0 = 0;       
+  36   1              P5M1 = 0;       P5M0 = 0;       
+  37   1              P6M1 = 0;       P6M0 = 0;       
+  38   1              P7M1 = 0;       P7M0 = 0;       
+  39   1              
+  40   1              AUXR = 0x80;    
+  41   1              TH0 = (u8)(Timer0_Reload / 256);
+  42   1              TL0 = (u8)(Timer0_Reload % 256);
+  43   1              ET0 = 1;        //Timer0 interrupt enable
+  44   1              TR0 = 1;        //Tiner0 run
+  45   1              EA = 1;         
+  46   1              
+  47   1              P1ASF = 0x10;           
+  48   1              ADC_CONTR = 0xE0;       //90T, ADC power on     
+  49   1              
+  50   1              bit_pulse = 0;
+  51   1              
+  52   1              timer_10ms = 0;
+  53   1              
+  54   1              state = 0;
+  55   1              data_o = 1;
+C51 COMPILER V9.01   TEST_PULSE_SENSOR                                                     05/22/2016 22:41:55 PAGE 2   
+
+  56   1              data_i = 1;
+  57   1              
+  58   1              err_led = 0;    //debug
+  59   1              rsv_led = 0;    //debug
+  60   1              send_led = 0;   //debug
+  61   1      }
+  62          
+  63          void error()
+  64          {
+  65   1              err_led = 1;    //debug
+  66   1      }
+  67          
+  68          void timer0 (void) interrupt TIMER0_VECTOR
+  69          {
+  70   1              bit_pulse = 1;          
+  71   1              if (++timer_10ms == Baud_Rate / 100) timer_10ms = 0;
+  72   1      }
+  73          
+  74          u8 bt_rsv(char msg[MAX_MSG])
+  75          {
+  76   1              u8 i,j;
+  77   1              u8 len,stop;
+  78   1              
+  79   1              rsv_led = 1;    //debug
+  80   1              
+  81   1              len = 0;
+  82   1              bit_pulse = 0;
+  83   1              stop = 0;
+  84   1              
+  85   1              while (1)
+  86   1              {
+  87   2                      if (data_i == 0)
+  88   2                      {
+  89   3                              i = 0;
+  90   3                              j = 0;
+  91   3                              while (1)
+  92   3                              {
+  93   4                                      if (bit_pulse)
+  94   4                                      {
+  95   5                                              bit_pulse = 0;
+  96   5                                              switch (j)
+  97   5                                              {
+  98   6                                                      case 0: 
+  99   6                                                              if (data_i || i == MAX_MSG) stop = 1;
+ 100   6                                                              else msg[i] = 0;
+ 101   6                                                              break; 
+ 102   6                                                      case 1:case 2:case 3:case 4:case 5:case 6:case 7:case 8:
+ 103   6                                                              if (data_i) msg[i] += 1 << (j - 1);
+ 104   6                                                              break;
+ 105   6                                                      case 9:
+ 106   6                                                              if (!data_i) error();
+ 107   6                                                              else
+ 108   6                                                              {
+ 109   7                                                                      i++;
+ 110   7                                                                      len++;
+ 111   7                                                              }
+ 112   6                                              }
+ 113   5                                              if (++j == 10) j = 0;
+ 114   5                                      }
+ 115   4                                      if (stop) break;
+ 116   4                              }       
+ 117   3                      }
+C51 COMPILER V9.01   TEST_PULSE_SENSOR                                                     05/22/2016 22:41:55 PAGE 3   
+
+ 118   2                      if (stop) break;
+ 119   2              }
+ 120   1              
+ 121   1              rsv_led = 0;    //debug
+ 122   1              
+ 123   1              return (len);
+ 124   1      }
+ 125          
+ 126          
+ 127          void bt_send(char msg[MAX_MSG])
+ 128          {
+ 129   1              u8 i,j;
+ 130   1              u8 len = strlen(msg);
+ 131   1              
+ 132   1              send_led = 1;   //debug
+ 133   1              
+ 134   1              bit_pulse = 0;
+ 135   1              for (i = 0;i < len;i++)
+ 136   1              {
+ 137   2                      j = 0;
+ 138   2                      while (1)
+ 139   2                      {
+ 140   3                              if (bit_pulse)
+ 141   3                              {
+ 142   4                                      bit_pulse = 0;
+ 143   4                                      switch (j)
+ 144   4                                      {
+ 145   5                                              case 0:
+ 146   5                                                      data_o = 0;
+ 147   5                                                      break;
+ 148   5                                              case 1:case 2:case 3:case 4:case 5:case 6:case 7:case 8:
+ 149   5                                                      data_o = (msg[i] >> (j - 1)) % 2;
+ 150   5                                                      break;
+ 151   5                                              case 9:
+ 152   5                                                      data_o = 1;
+ 153   5                                                      break;
+ 154   5                                      }
+ 155   4                                      j++;
+ 156   4                                      if (j == 10) break;
+ 157   4                              }
+ 158   3                      }
+ 159   2              }
+ 160   1              
+ 161   1              send_led = 0;   //debug
+ 162   1              
+ 163   1      }
+ 164          
+ 165          void clear(char msg[MAX_MSG])
+ 166          {
+ 167   1              u8 i;
+ 168   1              for (i = 0;i < MAX_MSG;i++)
+ 169   1              {
+ 170   2                      msg[i] = 0;
+ 171   2              }
+ 172   1      }
+ 173          
+ 174          void delay_1s()
+ 175          {
+ 176   1              u8 cnt_1s = 0;
+ 177   1              while (1)
+ 178   1              {
+ 179   2                      if (!timer_10ms) cnt_1s++;
+C51 COMPILER V9.01   TEST_PULSE_SENSOR                                                     05/22/2016 22:41:55 PAGE 4   
+
+ 180   2                      if (cnt_1s == 100) break;
+ 181   2              }
+ 182   1      }
+ 183          
+ 184          void main()
+ 185          {
+ 186   1              u8 i;
+ 187   1              char msg[MAX_MSG];
+ 188   1      
+ 189   1              init();
+ 190   1              clear(msg);
+ 191   1              
+ 192   1              while (1)
+ 193   1              {
+ 194   2                      bt_rsv(msg);
+ 195   2                      bt_send(msg);
+ 196   2                      clear(msg);
+ 197   2              }
+ 198   1              //while(1)
+ 199   1              //{
+ 200   1                      //if (!state) continue;
+ 201   1                      /*for (i = 0;i < 10;i++)
+ 202   1                      {
+ 203   1                              sprintf(msg,"%d",i);
+ 204   1                              bt_send(msg);
+ 205   1                              delay_1s();
+ 206   1                      }*/
+ 207   1              //}
+ 208   1      }
+*** WARNING C280 IN LINE 186 OF TEST_PULSE_SENSOR.C: 'i': unreferenced local variable
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    429    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      2      33
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)
